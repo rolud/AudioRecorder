@@ -24,13 +24,13 @@ public class CallReceiver extends BroadcastReceiver{
                 Log.w("PhoneListener", state + " incoming n: " + incomingNumber);
                 switch (state) {
                     case 0: // call finished
-                        AudioRecorderService.resumeRecording(context.getApplicationContext());
+                        //AudioRecorderService.resumeRecording(context.getApplicationContext());
                         break;
                     case 1: // incoming call
-                        AudioRecorderService.pauseRecording(context.getApplicationContext());
+                        //AudioRecorderService.pauseRecording(context.getApplicationContext());
                         break;
                     case 2: // outcoming call
-                        AudioRecorderService.pauseRecording(context.getApplicationContext());
+                        //AudioRecorderService.pauseRecording(context.getApplicationContext());
                         break;
                 }
             }

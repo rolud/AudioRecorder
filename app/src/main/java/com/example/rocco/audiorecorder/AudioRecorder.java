@@ -17,6 +17,7 @@ public class AudioRecorder extends AppCompatActivity {
     private static final int READ = 201;
     private static final int WRITE = 203;
     private static final int PHONE_STATE = 205;
+    private static final int CAMERA = 206;
 
     //private MediaRecorder recorder;
 
@@ -33,7 +34,8 @@ public class AudioRecorder extends AppCompatActivity {
     private String[] permissions = {Manifest.permission.RECORD_AUDIO,
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            Manifest.permission.READ_PHONE_STATE};
+            Manifest.permission.READ_PHONE_STATE,
+            /*Manifest.permission.CAMERA*/};
 
     public void onRequestPermissionResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -50,6 +52,9 @@ public class AudioRecorder extends AppCompatActivity {
             case PHONE_STATE:
                 permissionToRecordAccepted = grantResults[0] == PackageManager.PERMISSION_GRANTED;
                 break;
+//            case CAMERA:
+//                permissionToRecordAccepted = grantResults[0] == PackageManager.PERMISSION_GRANTED;
+//                break;
         }
         if (!permissionToRecordAccepted)
             finish();
@@ -68,6 +73,7 @@ public class AudioRecorder extends AppCompatActivity {
         ActivityCompat.requestPermissions(this, permissions, WRITE);
         ActivityCompat.requestPermissions(this, permissions, READ);
         ActivityCompat.requestPermissions(this, permissions, PHONE_STATE);
+        //ActivityCompat.requestPermissions(this, permissions, CAMERA);
 
         recordButton = findViewById(R.id.buttonRecord);
         stopButton = findViewById(R.id.buttonStop);
