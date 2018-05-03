@@ -1,30 +1,29 @@
 package com.example.rocco.audiorecorder;
 
-import android.app.Notification;
-import android.app.PendingIntent;
+import android.app.ActivityManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.camera2.CameraManager;
-import android.media.AudioAttributes;
-import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaRecorder;
-import android.os.Environment;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.Message;
 import android.support.annotation.NonNull;
-import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 import android.widget.Toast;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 
 public class AudioRecorderService extends Service {
 
 
-    private enum Actions {
+    public enum Actions {
         START, STOP, PAUSE, RESUME
     }
 
@@ -36,6 +35,11 @@ public class AudioRecorderService extends Service {
     private AudioManager.OnAudioFocusChangeListener mOnAudioFocusChangeListener;
     private boolean mAudioRecorderPaused = false; // true if the recorder is paused
 
+    // ----- THREAD
+    HandlerThread handlerThread = new HandlerThread("BackgroundThread");
+    Handler mHandler;
+
+
     @Override
     public IBinder onBind(Intent intent) {
         // do not provide binding
@@ -45,6 +49,8 @@ public class AudioRecorderService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+
+        Log.i("SERVICE", "In onCreate");
 
         // ----- CREATE AUDIO FOCUS LISTENER
         mOnAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
@@ -104,34 +110,67 @@ public class AudioRecorderService extends Service {
                 handlePause();
             }
         }, null);
+
+        // ----- start thread
+        handlerThread.start();
+        mHandler = new Handler(handlerThread.getLooper()) {
+            @Override
+            public void handleMessage(Message msg) {
+
+            }
+        };
     }
 
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        //Toast.makeText(this, "Recorder Stopped", Toast.LENGTH_SHORT).show();
+
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        //String fileName = intent.getStringExtra("FILENAME");
-        //startRecording(fileName);
+        Log.i("SERVICE", "In onStartCommand");
         if (intent != null) {
             final String action = intent.getAction();
-            Log.w("AudioRecorderService", action);
+            Log.i("AudioRecorderService", action);
             if (Actions.START.name().equals(action)) {
-                handleStart();
+//                handleStart();
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        handleStart();
+                    }
+                });
             } else if (Actions.STOP.name().equals(action)) {
-                handleStop();
+//                handleStop();
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        handleStop();
+                    }
+                });
             } else if (Actions.PAUSE.name().equals(action)) {
-                handlePause();
+//                handlePause();
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        handlePause();
+                    }
+                });
             } else if (Actions.RESUME.name().equals(action)) {
-                handleResume();
+//                handleResume();
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        handleResume();
+                    }
+                });
             }
         }
 
-        return START_STICKY;
+//        return START_STICKY;
+        return START_REDELIVER_INTENT;
     }
 
     // ----- HANDLE AUDIO FOCUS
@@ -166,7 +205,13 @@ public class AudioRecorderService extends Service {
 
     // ----- HANDLE ACTION METHOD
     private void handleStart() {
-        String mFileName = Environment.getExternalStorageDirectory().getAbsolutePath();
+//        String mFileName = Environment.getExternalStorageDirectory().getAbsolutePath();  // save file on external storage
+        String mFileName = this.getFilesDir().getAbsolutePath();  // save file on internal storage
+        Log.i("START", "file dir: " + mFileName);
+//        String[] fs = this.getFilesDir().list().clone();
+//        for (int i=0; i < fs.length; i++) {
+//            Log.i("START", ""+fs[i]);
+//        }
         SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMdd_HHmmss");
         mFileName += "/audiorecordtest_" + formatter.format(new Date()) + ".mp3";
 
@@ -178,63 +223,53 @@ public class AudioRecorderService extends Service {
                 recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
                 recorder.setOutputFormat(MediaRecorder.OutputFormat.DEFAULT);
                 recorder.setOutputFile(mFileName);
-                recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+                recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             } catch (IllegalStateException e) {
-                Log.w("Recorder", "Setting resource failed: " + e);
+                Log.e("START", "Setting resource failed: " + e);
 
             }
 
             // acquire audio focus
             if (!mAudioFocusGranted && requestAudioFocus()) {
-                // STOP
+                // audio focus granted
                 Log.i("SERVICE", "AUDIO FOCUS GRANTED.");
+
+
+                // start
+                try {
+                    recorder.prepare();   // inizializza
+                    recorder.start();
+                    Log.i("RECORDER", "The recorder is started.");
+                    Toast.makeText(this, "Recorder Started", Toast.LENGTH_SHORT).show();
+
+                    mAudioRecording = true;
+
+                } catch (IllegalStateException e) {
+                    // mic is unavaible
+                    Log.e("Recorder", "recorder.start() failed, mic is unavaible: " + e);
+                    recorder.release();
+                    recorder = null;
+                } catch (IOException e) {
+                    Log.e("Recorder", "Prepare fails.");
+                }
+
+
             }
-
-
-            // start
-            try {
-                recorder.prepare();   // inizializza
-                recorder.start();
-                Log.i("RECORDER", "The recorder is started.");
-                Toast.makeText(this, "Recorder Started", Toast.LENGTH_SHORT).show();
-            } catch (IllegalStateException e) {
-                Log.e("Recorder", "Prepare/start failed: " + e);
-                e.printStackTrace();
-            } catch (RuntimeException e) {
-                recorder.reset();
-                recorder = null;
-                //recorder.release();
-                Log.e("Recorder", "Prepare/start failed: " + e);
-                e.printStackTrace();
-                Toast.makeText(this, "The microphone is already used by another app.", Toast.LENGTH_SHORT).show();
-                Log.e("Recorder", "Prepare/start failed: " + e);
-            } catch (IOException e) {
-                Log.e("Recorder", "The microphone is already used by another app.");
-            }
-
-            mAudioRecording = true;
 
             // ------ START FOREGROUND SERVICE
-            Intent notificationIntent = new Intent(this, AudioRecorder.class);
-            PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
-
-            Notification notification = new Notification.Builder(this)
-                    .setContentTitle("AudioRecorder")
-                    .setContentText("AudioRecorder")
-                    .setTicker("AudioRecorder")
-                    .setContentIntent(pendingIntent)
-                    .setOngoing(true)
-                    .build();
-
-            startForeground(NOTIFICATION_ID, notification);
+//            Intent notificationIntent = new Intent(this, AudioRecorder.class);
+//            PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+//
+//            Notification notification = new Notification.Builder(this)
+//                    .setContentTitle("AudioRecorder")
+//                    .setContentText("AudioRecorder")
+//                    .setTicker("AudioRecorder")
+//                    .setContentIntent(pendingIntent)
+//                    .setOngoing(true)
+//                    .build();
+//
+//            startForeground(NOTIFICATION_ID, notification);
         }
-//        try {
-//            recorder.start();
-//            Toast.makeText(this, "Recorder Started", Toast.LENGTH_SHORT).show();
-//        } catch (RuntimeException e) {
-//            Log.w("Recorder", "Start failed: " + e);
-//            Toast.makeText(this, "The microphone is already used by another app.", Toast.LENGTH_SHORT).show();
-//        }
 
 
     }
@@ -255,7 +290,7 @@ public class AudioRecorderService extends Service {
             mAudioRecording = false;
             abandonAudioFocus();
 
-            stopForeground(true); // stop foreground service
+//            stopForeground(true); // stop foreground service
             stopSelf();
         }
     }
